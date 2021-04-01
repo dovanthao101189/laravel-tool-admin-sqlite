@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\StoreShop;
+
 class HomeController
 {
     public function index()
     {
-        return view('home');
+        $storeShops = StoreShop::all();
+
+        return view('home', compact('storeShops'));
     }
 }

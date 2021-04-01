@@ -3,34 +3,28 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\StoreShop;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 
 
 class ToolController extends Controller
 {
-    private $shopifyApiKey;
-    private $shopifySecretKey;
-    private $shopifyStore;
-    private $shopifyViewLink;
-
-    private $shopbaseApiKey;
-    private $shopbaseSecretKey;
-    private $shopbaseStore;
-    private $shopbaseViewLink;
-
+    private $storeShops;
 
     public function __construct()
     {
-        $this->shopifyApiKey = config('app.shopify_api_key');
-        $this->shopifySecretKey = config('app.shopify_secret_key');
-        $this->shopifyStore = config('app.shopify_store');
-        $this->shopifyViewLink = config('app.shopify_view_link');
+        $this->storeShops = $this->getStoreShopS();
+    }
 
-        $this->shopbaseApiKey = config('app.shopbase_api_key');
-        $this->shopbaseSecretKey = config('app.shopbase_secret_key');
-        $this->shopbaseStore = config('app.shopbase_store');
-        $this->shopbaseViewLink = config('app.shopbase_view_link');
+    private function getStoreShopS() {
+        $data = StoreShop::all();
+        $ref = array();
+        foreach ($data as $d) {
+            $ref[$d->id] = $d;
+        }
+
+        return $ref;
     }
 
     public function create(Request $request)
@@ -44,15 +38,16 @@ class ToolController extends Controller
             if ($source === 'shopify') {
                 $arrLink = $this->getArrLinkFromCollectionShopify($link);
                 if ($arrLink['success']){
+                    $reviewSite = [];
                     foreach ($arrLink['data'] as $l) {
-                        $this->addProduct($l, $site);
+                        $views = $this->addProduct($l, $site);
+                        $reviewSite = array_merge($reviewSite, $views);
                         usleep( 1 * 1000000 );
                     }
-                    return response()->json(['total' => count($arrLink['data'])]);
-//                    return view("products.create", ['success' => true, 'total' => count($arrLink['data'])]);
+                    return response()->json(['success' => true, 'views' => $reviewSite]);
                 }
             } else {
-                $total = 0;
+                $reviewSite = [];
                 $arr = parse_url($link);
                 $domain = $arr['scheme'].'://'.$arr['host'];
                 $baseGet = $domain.'/api/catalog/products_v2.json?collection_ids='.$this->getIdShopbase($link).'&page=';
@@ -65,25 +60,22 @@ class ToolController extends Controller
                         break;
                     }
                     $i++;
-                    $total += count($datas);
                     foreach ($datas as $data) {
-                        $this->addProductData($data, $site, $source);
+                        $views = $this->addProductData($data, $site, $source);
+                        $reviewSite = array_merge($reviewSite, $views);
                         usleep( 1 * 1000000 );
                     }
                 }
 
-                return response()->json(['total' => $total]);
-//                return view("products.create", ['success' => true, 'total' => $total]);
+                return response()->json(['success' => true, 'views' => $reviewSite]);
             }
 
         } else {
             $reviewSite = $this->addProduct($link, $site, $source);
-            return response()->json([]);
-//            return view("products.create", ['success' => true, 'view' => $reviewSite]);
+            return response()->json(['success' => true, 'views' => $reviewSite]);
         }
 
-        return response()->json([]);
-//        return view("products.create");
+        return response()->json(['success' => true, 'views' => []]);
     }
 
     private function addProduct($link, $site, $source='shopify') {
@@ -99,36 +91,34 @@ class ToolController extends Controller
 
             $product = $this->getProductByLink($link);
             if ($product['success']) {
+                $productData = json_decode($product['data'], true);
+                $sourceData = $source === 'shopify' ? $productData['product'] : $productData['products'][0];
                 $reviewSite = [];
-                if (in_array('shopify', $site)) {
-                    $productData = json_decode($product['data'], true);
-                    $sourceData = $source === 'shopify' ? $productData['product'] : $productData['products'][0];
-                    $results = $this->addProductShopify($sourceData, $source);
-                    if ($results['success']) {
-                        $data = json_decode($results['data'], true);
-                        $productHandle = $data['product']['handle'] ? $data['product']['handle'] : '';
-                        array_push($reviewSite, [
-                            "link" => $this->shopifyViewLink.$productHandle,
-                            "name" => "shopify"
-                        ]);
-                    }
-                }
 
-                if (in_array('shopbase', $site)) {
-                    $productData = json_decode($product['data'], true);
-                    $sourceData = $source === 'shopify' ? $productData['product'] : $productData['products'][0];
-                    $results = $this->addProductShopbase($sourceData, $source);
-                    if ($results['success']) {
-                        $data = json_decode($results['data'], true);
-                        $productHandle = $data['product']['handle'] ? $data['product']['handle'] : '';
-                        array_push($reviewSite, [
-                            "link" => $this->shopbaseViewLink.$productHandle,
-                            "name" => "shopbase"
-                        ]);
+                foreach ($site as $sId) {
+                    $sId = intval($sId);
+                    if ($sId > 0) {
+                        $shop = $this->storeShops[$sId];
+                        $results = ['success' => false];
+                        if (strtolower($shop->type_shop) === 'shopify') {
+                            $results = $this->addProductShopify($sourceData, $source, $shop);
+                        }
+
+                        if (strtolower($shop->type_shop) === 'shopbase') {
+                            $results = $this->addProductShopbase($sourceData, $source, $shop);
+                        }
+
+                        if ($results['success']) {
+                            array_push($reviewSite, [
+                                "link" => $shop->store_front.$sourceData['handle'],
+                                "title" => $sourceData['title']
+                            ]);
+                        }
                     }
                 }
 
                 return $reviewSite;
+
             }
         }
     }
@@ -137,25 +127,26 @@ class ToolController extends Controller
         $totalKey = count((array)$data);
         if ($totalKey > 0) {
             $reviewSite = [];
-            if (in_array('shopify', $site)) {
-                $results = $this->addProductShopify($data, $source);
-                if ($results['success']) {
-                    $productHandle = $data['handle'] ? $data['handle'] : '';
-                    array_push($reviewSite, [
-                        "link" => $this->shopifyViewLink.$productHandle,
-                        "name" => "shopify"
-                    ]);
-                }
-            }
 
-            if (in_array('shopbase', $site)) {
-                $results = $this->addProductShopbase($data, $source);
-                if ($results['success']) {
-                    $productHandle = $data['handle'] ? $data['handle'] : '';
-                    array_push($reviewSite, [
-                        "link" => $this->shopbaseViewLink.$productHandle,
-                        "name" => "shopbase"
-                    ]);
+            foreach ($site as $sId) {
+                $sId = intval($sId);
+                if ($sId > 0) {
+                    $shop = $this->storeShops[$sId];
+                    $results = ['success' => false];
+                    if (strtolower($shop->type_shop) === 'shopify') {
+                        $results = $this->addProductShopify($data, $source, $shop);
+                    }
+
+                    if (strtolower($shop->type_shop) === 'shopbase') {
+                        $results = $this->addProductShopbase($data, $source, $shop);
+                    }
+
+                    if ($results['success']) {
+                        array_push($reviewSite, [
+                            "link" => $shop->store_front.$data['handle'],
+                            "title" => $data['title']
+                        ]);
+                    }
                 }
             }
 
@@ -222,11 +213,11 @@ class ToolController extends Controller
         ];
     }
 
-    private function addImageShopify($data)
+    private function addImageShopify($data, $shop)
     {
-        $apiKey = $this->shopifyApiKey;
-        $secretKey = $this->shopifySecretKey;
-        $store = $this->shopifyStore;
+        $apiKey = $shop->api_key;
+        $secretKey = $shop->secret_key;
+        $store = $shop->store_name;
         $client = new Client();
         $productId = $data['product_id'];
         $endpoint = "https://${apiKey}:${secretKey}@${store}.myshopify.com/admin/api/2021-01/products/${productId}/images.json";
@@ -247,7 +238,7 @@ class ToolController extends Controller
         ];
     }
 
-    private function addProductShopify($product, $source='shopify')
+    private function addProductShopify($product, $source='shopify', $shop)
     {
         $data = [];
         if ($source==='shopbase') {
@@ -295,9 +286,10 @@ class ToolController extends Controller
             }
 
         }
-        $apiKey = $this->shopifyApiKey;
-        $secretKey = $this->shopifySecretKey;
-        $store = $this->shopifyStore;
+        $apiKey = $shop->api_key;
+        $secretKey = $shop->secret_key;
+        $store = $shop->store_name;
+
         $client = new Client();
         $endpoint = "https://${apiKey}:${secretKey}@${store}.myshopify.com/admin/api/2021-01/products.json";
         $request = $client->post($endpoint, [
@@ -310,7 +302,7 @@ class ToolController extends Controller
             $product_d = json_decode($product, true);
             foreach ($images as $i) {
                 $i['product_id'] = $product_d['product']['id'];
-                $this->addImageShopify($i);
+                $this->addImageShopify($i, $shop);
                 usleep( 1 * 1000000 );
             }
             return [
@@ -370,11 +362,11 @@ class ToolController extends Controller
         return $id;
     }
 
-    private function addImageShopbase($data)
+    private function addImageShopbase($data, $shop)
     {
-        $apiKey = $this->shopbaseApiKey;
-        $secretKey = $this->shopbaseSecretKey;
-        $store = $this->shopbaseStore;
+        $apiKey = $shop->api_key;
+        $secretKey = $shop->secret_key;
+        $store = $shop->store_name;
         $client = new Client();
         $productId = $data['product_id'];
         $endpoint = "https://${apiKey}:${secretKey}@${store}.onshopbase.com/admin/products/${productId}/images.json";
@@ -396,7 +388,7 @@ class ToolController extends Controller
         ];
     }
 
-    private function addProductShopbase($product, $source='shopify')
+    private function addProductShopbase($product, $source='shopify', $shop)
     {
         $data = [];
         $images = $product['images'];
@@ -428,9 +420,9 @@ class ToolController extends Controller
             }
         }
         unset($data['tags']);
-        $apiKey = $this->shopbaseApiKey;
-        $secretKey = $this->shopbaseSecretKey;
-        $store = $this->shopbaseStore;
+        $apiKey = $shop->api_key;
+        $secretKey = $shop->secret_key;
+        $store = $shop->store_name;
         $client = new Client();
         $endpoint = "https://${apiKey}:${secretKey}@${store}.onshopbase.com/admin/products.json";
         $request = $client->post($endpoint, [
@@ -443,7 +435,7 @@ class ToolController extends Controller
             $product_d = json_decode($product, true);
             foreach ($images as $i) {
                 $i['product_id'] = $product_d['product']['id'];
-                $this->addImageShopbase($i);
+                $this->addImageShopbase($i, $shop);
                 usleep( 1 * 1000000 );
             }
             return [

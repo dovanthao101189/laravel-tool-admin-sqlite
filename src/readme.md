@@ -49,3 +49,7 @@ Basically, feel free to use and re-use any way you want.
 
 docker-compose run --rm composer install
 docker-compose run --rm artisan migrate --seed 
+
+
+
+#https://github.com/LaravelDaily/Laravel-AdminLTE3-Boilerplate

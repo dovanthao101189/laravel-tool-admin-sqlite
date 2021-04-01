@@ -1,36 +1,6 @@
 <?php
 
 return [
-
-    'shopify_api_key' => env('SHOPIFY_API_KEY', ''),
-    'shopify_secret_key' => env('SHOPIFY_SECRET_KEY', ''),
-    'shopify_store' => env('SHOPIFY_STORE', ''),
-    'shopify_view_link' => env('SHOPIFY_VIEW_LINK', ''),
-
-    'shopbase_api_key' => env('SHOPBASE_API_KEY', ''),
-    'shopbase_secret_key' => env('SHOPBASE_SECRET_KEY', ''),
-    'shopbase_store' => env('SHOPBASE_STORE', ''),
-    'shopbase_view_link' => env('SHOPBASE_VIEW_LINK', ''),
-
-
-    'shopify' => [
-        'psapsa' => [
-            'store' => 'psapsa',
-            'apiKey' => '3f8996d6a7a059cecaee669aef73cbd0',
-            'secretKey' => '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',
-            'viewLink' => 'https://leuleushop.com/products/',
-        ]
-    ],
-
-    'shopbase' => [
-        'psapsa' => [
-            'store' => 'psapsa',
-            'apiKey' => '7affe2327660bea163cd39228731cd66',
-            'secretKey' => 'c9e18a9deabba90164619ec1c8698ddd1948138f1d369782672bae0a29f5eb1e',
-            'viewLink' => 'https://printyourex.com/products/',
-        ]
-    ],
-
     /*
     |--------------------------------------------------------------------------
     | Application Name
