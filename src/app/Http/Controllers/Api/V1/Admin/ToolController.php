@@ -34,7 +34,6 @@ class ToolController extends Controller
         $target = $request->input('target', null);
         $source = $request->input('source', null);
 
-//        $this->getProductTeechip($link);
         if ($target == 'collection') {
             if ($source === 'shopify') {
                 $arrLink = $this->getArrLinkFromCollectionShopify($link);
@@ -270,9 +269,11 @@ class ToolController extends Controller
             }
         }
 
+        $variantIdAndSku = [];
         foreach ($product as $k=>$v) {
             if ($k === 'variants') {
                 foreach ($product[$k] as $sk=>$sv) {
+                    $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
                     $data[$k][$sk] = $sv;
                     unset($data[$k][$sk]['image_id']);
                     unset($data[$k][$sk]['fulfillment_service']);
@@ -301,9 +302,19 @@ class ToolController extends Controller
         if ($request->getStatusCode() === 200 || $request->getStatusCode() === 201) {
             $product = $request->getBody()->getContents();
             $product_d = json_decode($product, true);
+
+            foreach ($product_d['product']['variants'] as $variant) {
+                foreach ($variantIdAndSku as $k=>$val) {
+                    if ($val['sku'] === $variant['sku']) {
+                        $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                    }
+                }
+            }
+
             foreach ($images as $i) {
                 $i['product_id'] = $product_d['product']['id'];
-                $this->addImageShopify($i, $shop);
+                $dataI =  $this->mapVariantIdAfterInsert($i, $variantIdAndSku);
+                $this->addImageShopify($dataI, $shop);
                 usleep( 1 * 1000000 );
             }
             return [
@@ -395,6 +406,7 @@ class ToolController extends Controller
         $images = $product['images'];
         unset($product['images']);
         unset($product['image']);
+        $variantIdAndSku = [];
         foreach ($product as $k=>$v) {
             if ($k === 'images') {
                 foreach ($product[$k] as $sk=>$sv) {
@@ -403,12 +415,17 @@ class ToolController extends Controller
                 }
             } elseif($k === 'variants') {
                 foreach ($product[$k] as $sk=>$sv) {
-                    if ($sk === 'option1') {
+                    $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
+                    $data[$k][$sk] = $sv;
+                    if (array_key_exists('option1', $sv)) {
                         $data[$k][$sk]['option1'] = strval($sv['option1']);
-                    }elseif ($sk === 'option2') {
+                    }
+                    if (array_key_exists('option2', $sv)) {
                         $data[$k][$sk]['option2'] = strval($sv['option2']);
-                    } else {
-                        $data[$k][$sk] = $sv;
+                    }
+
+                    if (array_key_exists('option3', $sv)) {
+                        $data[$k][$sk]['option3'] = strval($sv['option3']);
                     }
                 }
             }  elseif($k === 'body_html') {
@@ -434,9 +451,17 @@ class ToolController extends Controller
         if ($request->getStatusCode() === 200 || $request->getStatusCode() === 201) {
             $product = $request->getBody()->getContents();
             $product_d = json_decode($product, true);
+            foreach ($product_d['product']['variants'] as $variant) {
+                foreach ($variantIdAndSku as $k=>$val) {
+                    if ($val['sku'] === $variant['sku']) {
+                        $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                    }
+                }
+            }
             foreach ($images as $i) {
                 $i['product_id'] = $product_d['product']['id'];
-                $this->addImageShopbase($i, $shop);
+                $dataI =  $this->mapVariantIdAfterInsert($i, $variantIdAndSku);
+                $this->addImageShopbase($dataI, $shop);
                 usleep( 1 * 1000000 );
             }
             return [
@@ -449,5 +474,19 @@ class ToolController extends Controller
             'success' => false,
             'data' => []
         ];
+    }
+
+    private function mapVariantIdAfterInsert($dataImage, $variantIdAndSku) {
+        $VariantIds = [];
+        if (array_key_exists('variant_ids', $dataImage)) {
+            foreach ($variantIdAndSku as $k=>$val) {
+                if (in_array($k, $dataImage['variant_ids'])) {
+                    array_push($VariantIds, $val['new_id']);
+                }
+            }
+            $dataImage['variant_ids'] = $VariantIds;
+        }
+
+        return $dataImage;
     }
 }
