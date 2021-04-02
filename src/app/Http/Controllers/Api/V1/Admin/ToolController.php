@@ -274,7 +274,11 @@ class ToolController extends Controller
         foreach ($product as $k=>$v) {
             if ($k === 'variants') {
                 foreach ($product[$k] as $sk=>$sv) {
-                    $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
+                    if (strlen(trim(strval($sv['sku']))) > 0) {
+                        $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
+                    } else {
+                        $variantIdAndSku[$sv['id']] = ['title' => $sv['title'], 'id' => $sv['id']];
+                    }
                     $data[$k][$sk] = $sv;
                     unset($data[$k][$sk]['image_id']);
                     unset($data[$k][$sk]['fulfillment_service']);
@@ -306,8 +310,14 @@ class ToolController extends Controller
 
             foreach ($product_d['product']['variants'] as $variant) {
                 foreach ($variantIdAndSku as $k=>$val) {
-                    if ($val['sku'] === $variant['sku']) {
-                        $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                    if (array_key_exists('sku', $val)) {
+                        if ($val['sku'] === $variant['sku']) {
+                            $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                        }
+                    } else {
+                        if ($val['title'] === $variant['title']) {
+                            $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                        }
                     }
                 }
             }
