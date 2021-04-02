@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\StoreShop;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
+use function GuzzleHttp\Psr7\str;
 
 
 class ToolController extends Controller
@@ -415,7 +416,12 @@ class ToolController extends Controller
                 }
             } elseif($k === 'variants') {
                 foreach ($product[$k] as $sk=>$sv) {
-                    $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
+                    if (strlen(trim(strval($sv['sku']))) > 0) {
+                        $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
+                    } else {
+                        $variantIdAndSku[$sv['id']] = ['title' => $sv['title'], 'id' => $sv['id']];
+                    }
+
                     $data[$k][$sk] = $sv;
                     if (array_key_exists('option1', $sv)) {
                         $data[$k][$sk]['option1'] = strval($sv['option1']);
@@ -423,7 +429,6 @@ class ToolController extends Controller
                     if (array_key_exists('option2', $sv)) {
                         $data[$k][$sk]['option2'] = strval($sv['option2']);
                     }
-
                     if (array_key_exists('option3', $sv)) {
                         $data[$k][$sk]['option3'] = strval($sv['option3']);
                     }
@@ -453,8 +458,14 @@ class ToolController extends Controller
             $product_d = json_decode($product, true);
             foreach ($product_d['product']['variants'] as $variant) {
                 foreach ($variantIdAndSku as $k=>$val) {
-                    if ($val['sku'] === $variant['sku']) {
-                        $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                    if (array_key_exists('sku', $val)) {
+                        if ($val['sku'] === $variant['sku']) {
+                            $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                        }
+                    } else {
+                        if ($val['title'] === $variant['title']) {
+                            $variantIdAndSku[$k]['new_id'] = $variant['id'];
+                        }
                     }
                 }
             }
