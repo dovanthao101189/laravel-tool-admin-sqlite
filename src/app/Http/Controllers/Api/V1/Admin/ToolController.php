@@ -34,6 +34,7 @@ class ToolController extends Controller
         $target = $request->input('target', null);
         $source = $request->input('source', null);
 
+//        $this->getProductTeechip($link);
         if ($target == 'collection') {
             if ($source === 'shopify') {
                 $arrLink = $this->getArrLinkFromCollectionShopify($link);
@@ -402,12 +403,12 @@ class ToolController extends Controller
                 }
             } elseif($k === 'variants') {
                 foreach ($product[$k] as $sk=>$sv) {
-                    if (array_key_exists('option1', $sv)) {
+                    if ($sk === 'option1') {
                         $data[$k][$sk]['option1'] = strval($sv['option1']);
-                    }
-
-                    if (array_key_exists('option2', $sv)) {
+                    }elseif ($sk === 'option2') {
                         $data[$k][$sk]['option2'] = strval($sv['option2']);
+                    } else {
+                        $data[$k][$sk] = $sv;
                     }
                 }
             }  elseif($k === 'body_html') {
