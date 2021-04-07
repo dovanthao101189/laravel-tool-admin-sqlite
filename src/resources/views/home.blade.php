@@ -27,7 +27,7 @@
                                         name="site"
                                     />
                                     <label class="form-check-label" for="{{ $storeShop->id }}">
-                                        {{ $storeShop->store_name }}({{ $storeShop->type_shop }})
+                                        {{ $storeShop->store_name }}({{ $storeShop->type_shop }}) - (id: {{ $storeShop->id }})
                                     </label>
                                 </div>
                             @endforeach
