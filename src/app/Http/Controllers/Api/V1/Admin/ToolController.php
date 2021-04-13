@@ -446,6 +446,16 @@ class ToolController extends Controller
             unset($product['image']);
         }
 
+        $idValueOptions = [];
+        if ($source === 'shopbase') {
+            $optionSets = $product['option_sets'];
+            foreach ($optionSets as $k => $v) {
+                foreach ($v['options'] as $sk => $sv) {
+                    $idValueOptions[$sv['id']] = $sv;
+                }
+            }
+        }
+
         $variantIdAndSku = [];
         foreach ($product as $k => $v) {
             if ($k === 'images') {
@@ -463,13 +473,25 @@ class ToolController extends Controller
 
                     $data[$k][$sk] = $sv;
                     if (array_key_exists('option1', $sv)) {
-                        $data[$k][$sk]['option1'] = strval($sv['option1']);
+                        if (count($idValueOptions) > 0 && $source === 'shopbase') {
+                            $data[$k][$sk]['option1'] = $idValueOptions[$sv['option1']]['value'];
+                        } else {
+                            $data[$k][$sk]['option1'] = strval($sv['option1']);
+                        }
                     }
                     if (array_key_exists('option2', $sv)) {
-                        $data[$k][$sk]['option2'] = strval($sv['option2']);
+                        if (count($idValueOptions) > 0 && $source === 'shopbase') {
+                            $data[$k][$sk]['option2'] = $idValueOptions[$sv['option2']]['value'];
+                        } else {
+                            $data[$k][$sk]['option2'] = strval($sv['option2']);
+                        }
                     }
                     if (array_key_exists('option3', $sv)) {
-                        $data[$k][$sk]['option3'] = strval($sv['option3']);
+                        if (count($idValueOptions) > 0 && $source === 'shopbase') {
+                            $data[$k][$sk]['option3'] = $idValueOptions[$sv['option3']]['value'];
+                        } else {
+                            $data[$k][$sk]['option3'] = strval($sv['option3']);
+                        }
                     }
                 }
             } elseif ($k === 'body_html') {
