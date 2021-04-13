@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\StoreShop;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
-use function GuzzleHttp\Psr7\str;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 
 
 class ToolController extends Controller
@@ -18,7 +20,8 @@ class ToolController extends Controller
         $this->storeShops = $this->getStoreShopS();
     }
 
-    private function getStoreShopS() {
+    private function getStoreShopS()
+    {
         $data = StoreShop::all();
         $ref = array();
         foreach ($data as $d) {
@@ -34,37 +37,36 @@ class ToolController extends Controller
         $site = $request->input('site', []);
         $target = $request->input('target', null);
         $source = $request->input('source', null);
-
         if ($target == 'collection') {
             if ($source === 'shopify') {
                 $arrLink = $this->getArrLinkFromCollectionShopify($link);
-                if ($arrLink['success']){
+                if ($arrLink['success']) {
                     $reviewSite = [];
                     foreach ($arrLink['data'] as $l) {
                         $views = $this->addProduct($l, $site);
                         $reviewSite = array_merge($reviewSite, $views);
-                        usleep( 1 * 1000000 );
+                        usleep(1 * 1000000);
                     }
                     return response()->json(['success' => true, 'views' => $reviewSite]);
                 }
-            } else {
+            } elseif ($source === 'shopbase') {
                 $reviewSite = [];
                 $arr = parse_url($link);
-                $domain = $arr['scheme'].'://'.$arr['host'];
-                $baseGet = $domain.'/api/catalog/products_v2.json?collection_ids='.$this->getIdShopbase($link).'&page=';
+                $domain = $arr['scheme'] . '://' . $arr['host'];
+                $baseGet = $domain . '/api/catalog/products_v2.json?collection_ids=' . $this->getIdShopbase($link) . '&page=';
                 $i = 1;
                 while ($i >= 1) {
-                    $results = $this->getProductByLink($baseGet.$i);
+                    $results = $this->getProductByLink($baseGet . $i);
                     $products = json_decode($results['data'], true);
                     $datas = $products['products'];
-                    if(!$results['success'] || count($datas) === 0) {
+                    if (!$results['success'] || count($datas) === 0) {
                         break;
                     }
                     $i++;
                     foreach ($datas as $data) {
                         $views = $this->addProductData($data, $site, $source);
                         $reviewSite = array_merge($reviewSite, $views);
-                        usleep( 1 * 1000000 );
+                        usleep(1 * 1000000);
                     }
                 }
 
@@ -79,23 +81,38 @@ class ToolController extends Controller
         return response()->json(['success' => true, 'views' => []]);
     }
 
-    private function addProduct($link, $site, $source='shopify') {
+    private function addProduct($link, $site, $source = 'shopify')
+    {
         $link = trim($link);
         if ($link !== '') {
+            $sourceData = [];
+            $isSuccess = false;
             if ($source === 'shopify') {
                 $link = str_replace('.json', '', $link) . '.json';
-            } else {
-                $arr = parse_url($link);
-                $domain = $arr['scheme'].'://'.$arr['host'];
-                $link = $domain.'/api/catalog/products_v2.json?ids='.$this->getIdShopbase($link, 'product');
             }
 
-            $product = $this->getProductByLink($link);
-            if ($product['success']) {
+            if ($source === 'shopbase'){
+                $arr = parse_url($link);
+                $domain = $arr['scheme'] . '://' . $arr['host'];
+                $link = $domain . '/api/catalog/products_v2.json?ids=' . $this->getIdShopbase($link, 'product');
+            }
+
+            if ($source === 'shopify' || $source === 'shopbase') {
+                $product = $this->getProductByLink($link);
+                $isSuccess = $product['success'];
                 $productData = json_decode($product['data'], true);
                 $sourceData = $source === 'shopify' ? $productData['product'] : $productData['products'][0];
-                $reviewSite = [];
+            }
 
+            if ($source === 'teechip'){
+                $results = $this->getProductTeechip($link);
+                $isSuccess = $results['success'];
+                $sourceData = $results['data'];
+            }
+
+
+            if ($isSuccess) {
+                $reviewSite = [];
                 foreach ($site as $sId) {
                     $sId = intval($sId);
                     if ($sId > 0) {
@@ -111,7 +128,7 @@ class ToolController extends Controller
 
                         if ($results['success']) {
                             array_push($reviewSite, [
-                                "link" => $shop->store_front.$sourceData['handle'],
+                                "link" => $shop->store_front . $sourceData['handle'],
                                 "title" => $sourceData['title']
                             ]);
                         }
@@ -124,7 +141,8 @@ class ToolController extends Controller
         }
     }
 
-    private function addProductData($data, $site, $source='shopify') {
+    private function addProductData($data, $site, $source = 'shopify')
+    {
         $totalKey = count((array)$data);
         if ($totalKey > 0) {
             $reviewSite = [];
@@ -144,7 +162,7 @@ class ToolController extends Controller
 
                     if ($results['success']) {
                         array_push($reviewSite, [
-                            "link" => $shop->store_front.$data['handle'],
+                            "link" => $shop->store_front . $data['handle'],
                             "title" => $data['title']
                         ]);
                     }
@@ -158,12 +176,12 @@ class ToolController extends Controller
     private function getArrLinkFromCollectionShopify($link)
     {
         $parse = parse_url($link);
-        $domain = $parse['scheme']. '://' .$parse['host'];
+        $domain = $parse['scheme'] . '://' . $parse['host'];
         $link = trim($link);
         $baseGet = 'https://ncu8zq1h33.execute-api.us-west-2.amazonaws.com/default/shopify_collections_extractor?url=' . $link . '?page=';
-        $results = $this->getProductByLink($baseGet .'1');
+        $results = $this->getProductByLink($baseGet . '1');
         $data = json_decode($results['data'], true);
-        if(!$results['success'] || count($data) === 0) {
+        if (!$results['success'] || count($data) === 0) {
             return [
                 'success' => false,
                 'data' => []
@@ -174,9 +192,9 @@ class ToolController extends Controller
 
         $i = 2;
         while ($i >= 2) {
-            $results = $this->getProductByLink($baseGet.$i);
+            $results = $this->getProductByLink($baseGet . $i);
             $data = json_decode($results['data'], true);
-            if(!$results['success'] || count($data) === 0) {
+            if (!$results['success'] || count($data) === 0) {
                 break;
             }
             $i++;
@@ -187,7 +205,7 @@ class ToolController extends Controller
         foreach ($arrLink as $v) {
             foreach ($v as $link) {
                 if (!in_array($link, $arrLinkValid)) {
-                    array_push($arrLinkValid, $domain.$link.'.json');
+                    array_push($arrLinkValid, $domain . $link . '.json');
                 }
             }
         }
@@ -239,21 +257,26 @@ class ToolController extends Controller
         ];
     }
 
-    private function addProductShopify($product, $source='shopify', $shop)
+    private function addProductShopify($product, $source, $shop)
     {
         $data = [];
-        if ($source==='shopbase') {
+        $images = [];
+        if (array_key_exists('images', $product)) {
+            $images = $product['images'];
+            unset($product['images']);
+        }
+
+        if (array_key_exists('image', $product)) {
+            unset($product['image']);
+        }
+
+        if ($source === 'shopbase') {
+            $options = [];
+            if (array_key_exists('option_sets', $product)) {
+                $options = $product['option_sets'];
+                unset($product['option_sets']);
+            }
             $product['published_at'] = date("Y-m-d H:i:s", $product['published_at']);
-        }
-        $images = $product['images'];
-        unset($product['images']);
-        unset($product['image']);
-        $options = [];
-        if (array_key_exists('option_sets', $product)) {
-            $options = $product['option_sets'];
-            unset($product['option_sets']);
-        }
-        if ($source==='shopbase') {
             $data['options'] = [];
             foreach ($options as $op) {
                 $values = [];
@@ -261,8 +284,6 @@ class ToolController extends Controller
                     array_push($values, $sop['value']);
                 }
                 array_push($data['options'], [
-//                            "id" => $op['id'],
-//                            "product_id" => $product_d['product']['id'],
                     "name" => $op['value'],
                     "position" => 1,
                     "values" => $values
@@ -271,9 +292,9 @@ class ToolController extends Controller
         }
 
         $variantIdAndSku = [];
-        foreach ($product as $k=>$v) {
+        foreach ($product as $k => $v) {
             if ($k === 'variants') {
-                foreach ($product[$k] as $sk=>$sv) {
+                foreach ($product[$k] as $sk => $sv) {
                     if (strlen(trim(strval($sv['sku']))) > 0) {
                         $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
                     } else {
@@ -283,20 +304,20 @@ class ToolController extends Controller
                     unset($data[$k][$sk]['image_id']);
                     unset($data[$k][$sk]['fulfillment_service']);
                 }
-            } elseif($k === 'body_html') {
-                $data['body_html'] = preg_replace("/<a href=.*?>(.*?)<\/a>/","",$v);
-                $data['body_html'] = str_replace("today","",$data['body_html']);
-                $data['body_html'] = str_replace("Today","",$data['body_html']);
-                $data['body_html'] = str_replace("TODAY","",$data['body_html']);
+            } elseif ($k === 'body_html') {
+                $data['body_html'] = preg_replace("/<a href=.*?>(.*?)<\/a>/", "", $v);
+                $data['body_html'] = str_replace("today", "", $data['body_html']);
+                $data['body_html'] = str_replace("Today", "", $data['body_html']);
+                $data['body_html'] = str_replace("TODAY", "", $data['body_html']);
             } else {
                 $data[$k] = $v;
             }
 
         }
+
         $apiKey = $shop->api_key;
         $secretKey = $shop->secret_key;
         $store = $shop->store_name;
-
         $client = new Client();
         $endpoint = "https://${apiKey}:${secretKey}@${store}.myshopify.com/admin/api/2021-01/products.json";
         $request = $client->post($endpoint, [
@@ -309,7 +330,7 @@ class ToolController extends Controller
             $product_d = json_decode($product, true);
 
             foreach ($product_d['product']['variants'] as $variant) {
-                foreach ($variantIdAndSku as $k=>$val) {
+                foreach ($variantIdAndSku as $k => $val) {
                     if (array_key_exists('sku', $val)) {
                         if ($val['sku'] === $variant['sku']) {
                             $variantIdAndSku[$k]['new_id'] = $variant['id'];
@@ -324,9 +345,9 @@ class ToolController extends Controller
 
             foreach ($images as $i) {
                 $i['product_id'] = $product_d['product']['id'];
-                $dataI =  $this->mapVariantIdAfterInsert($i, $variantIdAndSku);
+                $dataI = $this->mapVariantIdAfterInsert($i, $variantIdAndSku);
                 $this->addImageShopify($dataI, $shop);
-                usleep( 1 * 1000000 );
+                usleep(1 * 1000000);
             }
             return [
                 'success' => true,
@@ -340,13 +361,14 @@ class ToolController extends Controller
         ];
     }
 
-    private function getIdShopbase($link, $source = 'collection') {
+    private function getIdShopbase($link, $source = 'collection')
+    {
         $html = file_get_contents($link);
         preg_match_all('/<script>(.*?)<\/script>/s', $html, $matches);
         $id = null;
         if (count($matches) > 0) {
-            foreach ($matches as $k=>$v) {
-                foreach ($v as $sk=>$sv) {
+            foreach ($matches as $k => $v) {
+                foreach ($v as $sk => $sv) {
                     $strValue = str_replace(' ', '', strval($sv));
                     if (strpos($strValue, 'window.__INITIAL_STATE__=') !== false) {
                         $strData = str_replace(
@@ -411,21 +433,28 @@ class ToolController extends Controller
         ];
     }
 
-    private function addProductShopbase($product, $source='shopify', $shop)
+    private function addProductShopbase($product, $source = 'shopify', $shop)
     {
         $data = [];
-        $images = $product['images'];
-        unset($product['images']);
-        unset($product['image']);
+        $images = [];
+        if (array_key_exists('images', $product)) {
+            $images = $product['images'];
+            unset($product['images']);
+        }
+
+        if (array_key_exists('image', $product)) {
+            unset($product['image']);
+        }
+
         $variantIdAndSku = [];
-        foreach ($product as $k=>$v) {
+        foreach ($product as $k => $v) {
             if ($k === 'images') {
-                foreach ($product[$k] as $sk=>$sv) {
+                foreach ($product[$k] as $sk => $sv) {
                     $data[$k][$sk]['position'] = $sv['position'];
                     $data[$k][$sk]['src'] = $sv['src'];
                 }
-            } elseif($k === 'variants') {
-                foreach ($product[$k] as $sk=>$sv) {
+            } elseif ($k === 'variants') {
+                foreach ($product[$k] as $sk => $sv) {
                     if (strlen(trim(strval($sv['sku']))) > 0) {
                         $variantIdAndSku[$sv['id']] = ['sku' => $sv['sku'], 'id' => $sv['id']];
                     } else {
@@ -443,11 +472,11 @@ class ToolController extends Controller
                         $data[$k][$sk]['option3'] = strval($sv['option3']);
                     }
                 }
-            }  elseif($k === 'body_html') {
-                $data['body_html'] = preg_replace("/<a href=.*?>(.*?)<\/a>/","",$v);
-                $data['body_html'] = str_replace("today","",$data['body_html']);
-                $data['body_html'] = str_replace("Today","",$data['body_html']);
-                $data['body_html'] = str_replace("TODAY","",$data['body_html']);
+            } elseif ($k === 'body_html') {
+                $data['body_html'] = preg_replace("/<a href=.*?>(.*?)<\/a>/", "", $v);
+                $data['body_html'] = str_replace("today", "", $data['body_html']);
+                $data['body_html'] = str_replace("Today", "", $data['body_html']);
+                $data['body_html'] = str_replace("TODAY", "", $data['body_html']);
             } else {
                 $data[$k] = $v;
             }
@@ -467,7 +496,7 @@ class ToolController extends Controller
             $product = $request->getBody()->getContents();
             $product_d = json_decode($product, true);
             foreach ($product_d['product']['variants'] as $variant) {
-                foreach ($variantIdAndSku as $k=>$val) {
+                foreach ($variantIdAndSku as $k => $val) {
                     if (array_key_exists('sku', $val)) {
                         if ($val['sku'] === $variant['sku']) {
                             $variantIdAndSku[$k]['new_id'] = $variant['id'];
@@ -481,9 +510,9 @@ class ToolController extends Controller
             }
             foreach ($images as $i) {
                 $i['product_id'] = $product_d['product']['id'];
-                $dataI =  $this->mapVariantIdAfterInsert($i, $variantIdAndSku);
+                $dataI = $this->mapVariantIdAfterInsert($i, $variantIdAndSku);
                 $this->addImageShopbase($dataI, $shop);
-                usleep( 1 * 1000000 );
+                usleep(1 * 1000000);
             }
             return [
                 'success' => true,
@@ -497,10 +526,11 @@ class ToolController extends Controller
         ];
     }
 
-    private function mapVariantIdAfterInsert($dataImage, $variantIdAndSku) {
+    private function mapVariantIdAfterInsert($dataImage, $variantIdAndSku)
+    {
         $VariantIds = [];
         if (array_key_exists('variant_ids', $dataImage)) {
-            foreach ($variantIdAndSku as $k=>$val) {
+            foreach ($variantIdAndSku as $k => $val) {
                 if (in_array($k, $dataImage['variant_ids'])) {
                     array_push($VariantIds, $val['new_id']);
                 }
@@ -509,5 +539,189 @@ class ToolController extends Controller
         }
 
         return $dataImage;
+    }
+
+    private function getProductTeechip($link)
+    {
+        $html = file_get_contents($link);
+        $tagScript = strip_tags($html, '<script>');
+        $string = str_replace("<script", "|||||<script", $tagScript);
+        $string = str_replace("</script>", "</script>|||||", $string);
+        $arr = explode("|||||", $string);
+        $strData = null;
+        if (count($arr) > 0) {
+            foreach ($arr as $k => $v) {
+                if (strpos($v, 'window.__INITIAL_STATE__') !== false) {
+                    $strData = str_replace('<script nonce="**CSP_NONCE**">', '', $v);
+                    $strData = str_replace('</script>', '', $strData);
+                    $strData = str_replace('<script>', '', $strData);
+                    $strData = str_replace(
+                        'window.__INITIAL_STATE__=',
+                        '',
+                        $strData);
+                    $strData = str_replace(
+                        'window.__INITIAL_STATE__ =',
+                        '',
+                        $strData);
+                    $strData = str_replace(
+                        ';(function(){var s;(s=document.currentScript||document.scripts[document.scripts.length-1]).parentNode.removeChild(s);}());',
+                        '',
+                        $strData);
+                    $strData = trim($strData);
+                    $lastCharacter = substr($strData, -1);
+                    if ($lastCharacter === ';') {
+                        $strData = substr($strData, 0, -1);
+                    }
+                    $data = json_decode($strData, true);
+                    if (json_last_error() === JSON_ERROR_NONE || json_last_error() === 0) {
+                        $dataFormat = $this->convertTeechipToShopify($data);
+                        return [
+                            'success' => true,
+                            'data' => $dataFormat
+                        ];
+//                        @$doc = new DOMDocument();
+//                        @$doc->loadHTML($html);
+//                        $xpath = new DomXPath($doc);
+//                        $nodeList = $xpath->query("//div[@class='bc-grey-200 bwt-1 w-full']");
+//                        $node = $nodeList->item(0);
+//                        $innerHTML= '';
+//                        $children = $node->childNodes;
+//                        foreach ($children as $child) {
+//                            $innerHTML .= $child->ownerDocument->saveXML($child);
+//                        }
+//                        $data['body_html'] = $innerHTML;
+                    }
+                }
+            }
+        }
+
+        return [
+            'success' => false,
+            'data' => []
+        ];
+    }
+
+    private function convertTeechipToShopify($data)
+    {
+        $title = '';
+        $sizeAll = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
+        $colors = [];
+        $sizesMulti = [];
+        $tagsMulti = [];
+        $images = [];
+        $imagesCheck = [];
+        $variants = [];
+        $productsFetch = $data['vias']['RetailProduct']['docs']['code'];
+        $codeCurrent = $data['routing']['locationBeforeTransitions']['query']['retailProductCode'];
+        $sameCodeCurrent = explode("-", $codeCurrent);
+        $groupCodeCurrent = $sameCodeCurrent[2];
+
+        $positionImage = 1;
+        if (count($productsFetch) > 0) {
+            $title = $productsFetch[$codeCurrent]['doc']['names']['design'];
+            foreach ($productsFetch as $k => $p) {
+                $sameCode = explode("-", $k);
+                $groupCode = $sameCode[2];
+                if ($groupCodeCurrent === $groupCode) {
+                    $product = $p['doc'];
+                    if (!in_array($product['color'], $colors)) {
+                        array_push($colors, $product['color']);
+                    }
+
+                    $title = $product['names']['design'] . ' ' . $product['names']['product'];
+                    $price = $product['price'];
+                    if ($price > 0) {
+                        $price = $price / 100;
+                    }
+                    $tags = $product['tags']['product'];
+
+                    foreach ($tags as $tag_key => $tag) {
+                        if (!in_array($tag, $tagsMulti)) {
+                            array_push($tagsMulti, $tag);
+                        }
+                    }
+
+                    $imagesFetch = $product['images'];
+                    $sizesByVariant = [];
+                    foreach ($imagesFetch as $k_img => $img) {
+                        if (!in_array($img['prefix'] . '/regular.jpg', $imagesCheck)) {
+                            $awsUrl = '';
+                            $url = $img['prefix'].'/regular.jpg';
+                            $contents = file_get_contents($url);
+                            $name = substr($url, strrpos($url, '/') + 1);
+                            $name = explode('?', $name);
+                            $fileName = $name[0];
+                            $filePath = 'teechip/products/'.$k.'/'.$fileName;
+                            $awsSaved = Storage::disk('s3')->put($filePath, $contents, 'public');
+                            if ($awsSaved) {
+                                $awsUrl = Storage::disk('s3')->url($filePath);
+                            }
+
+                            array_push($imagesCheck, $img['prefix'] . '/regular.jpg');
+                            array_push($images, [
+                                'position' => $positionImage,
+                                'src' => $awsUrl,
+                                'variant_ids' => [$product['_id']],
+                            ]);
+                        }
+                        $positionImage++;
+
+                        $sizes = $img['sizes'];
+                        foreach ($sizes as $k_size => $size) {
+                            $size = $size['size'];
+                            $sizeInsert = [];
+                            if (strtolower($size) === 'all') {
+                                $sizeInsert = $sizeAll;
+                            } else {
+                                $sizeInsert = [$size];
+                            }
+
+                            foreach ($sizeInsert as $s) {
+                                if (!in_array($s, $sizesMulti)) {
+                                    array_push($sizesMulti, $s);
+                                }
+
+                                if (!in_array($s, $sizesByVariant)) {
+                                    array_push($sizesByVariant, $s);
+                                }
+                            }
+                        }
+                    }
+
+                    foreach ($sizesByVariant as $sizeOp) {
+                        array_push($variants, [
+                            'id' => $product['_id'],
+                            'title' => $title,
+                            'product_id' => $product['productId'],
+                            'price' => $price,
+                            'sku' => $k,
+                            "option1" => $product['color'],
+                            "option2" => $sizeOp,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        $options = [
+            ['name' => 'Size', 'position' => 1, 'values' => $sizesMulti],
+            ['name' => 'Color', 'position' => 2, 'values' => $colors],
+        ];
+
+
+        return [
+            'title' => $title,
+            'body_html' => '',
+            'handle' => $codeCurrent,
+            'vendor' => '',
+            'product_type' => '',
+            'published_at' => date('Y-m-d H:i:s'),
+            'published_scope' => 'web',
+            'status' => 'active',
+            "tags" => $tagsMulti,
+            "options" => $options,
+            "variants" => $variants,
+            "images" => $images,
+        ];
     }
 }

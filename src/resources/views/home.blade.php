@@ -67,6 +67,11 @@
                                         <input type="radio" class="form-check-input" value="shopbase" name="source">Shopbase
                                     </label>
                                 </div>
+                                <div class="form-check-inline">
+                                    <label class="form-check-label">
+                                        <input type="radio" class="form-check-input" value="teechip" name="source">Teechip
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
