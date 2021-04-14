@@ -455,7 +455,8 @@ class ToolController extends Controller
                 }
             }
         }
-
+        $keys = array_keys($idValueOptions);
+        $tmp = [];
         $variantIdAndSku = [];
         foreach ($product as $k => $v) {
             if ($k === 'images') {
@@ -473,22 +474,36 @@ class ToolController extends Controller
 
                     $data[$k][$sk] = $sv;
                     if (array_key_exists('option1', $sv)) {
-                        if (count($idValueOptions) > 0 && $source === 'shopbase') {
-                            $data[$k][$sk]['option1'] = $idValueOptions[$sv['option1']]['value'];
+                        if (count($keys) > 0 && $source === 'shopbase') {
+                            if (in_array($sv['option1'], $keys)) {
+                                array_push($tmp, $sv['option1']);
+                                $data[$k][$sk]['option1'] = $idValueOptions[$sv['option1']]['value'];
+                            } else {
+                                $data[$k][$sk]['option1'] = null;
+                            }
                         } else {
                             $data[$k][$sk]['option1'] = strval($sv['option1']);
                         }
                     }
                     if (array_key_exists('option2', $sv)) {
-                        if (count($idValueOptions) > 0 && $source === 'shopbase') {
-                            $data[$k][$sk]['option2'] = $idValueOptions[$sv['option2']]['value'];
+                        if (count($keys) > 0 && $source === 'shopbase') {
+                            if (in_array($sv['option2'], $keys)) {
+                                array_push($tmp, $sv['option2']);
+                                $data[$k][$sk]['option2'] = $idValueOptions[$sv['option2']]['value'];
+                            } else {
+                                $data[$k][$sk]['option2'] = null;
+                            }
                         } else {
                             $data[$k][$sk]['option2'] = strval($sv['option2']);
                         }
                     }
                     if (array_key_exists('option3', $sv)) {
-                        if (count($idValueOptions) > 0 && $source === 'shopbase') {
-                            $data[$k][$sk]['option3'] = $idValueOptions[$sv['option3']]['value'];
+                        if (count($keys) > 0 && $source === 'shopbase') {
+                            if (in_array($sv['option3'], $keys)) {
+                                $data[$k][$sk]['option3'] = $idValueOptions[$sv['option3']]['value'];
+                            } else {
+                                $data[$k][$sk]['option3'] = null;
+                            }
                         } else {
                             $data[$k][$sk]['option3'] = strval($sv['option3']);
                         }
