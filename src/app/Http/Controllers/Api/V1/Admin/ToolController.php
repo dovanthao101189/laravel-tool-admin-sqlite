@@ -131,6 +131,13 @@ class ToolController extends Controller
                                 "link" => $shop->store_front . $sourceData['handle'],
                                 "title" => $sourceData['title']
                             ]);
+                        } else {
+                            if (array_key_exists('error', $results)) {
+                                array_push($reviewSite, [
+                                    "link" => '',
+                                    "title" => $results['error']
+                                ]);
+                            }
                         }
                     }
                 }
@@ -165,6 +172,13 @@ class ToolController extends Controller
                             "link" => $shop->store_front . $data['handle'],
                             "title" => $data['title']
                         ]);
+                    } else {
+                        if (array_key_exists('error', $results)) {
+                            array_push($reviewSite, [
+                                "link" => '',
+                                "title" => $results['error']
+                            ]);
+                        }
                     }
                 }
             }
@@ -270,6 +284,8 @@ class ToolController extends Controller
             unset($product['image']);
         }
 
+        $keys = [];
+        $idValueOptions = [];
         if ($source === 'shopbase') {
             $options = [];
             if (array_key_exists('option_sets', $product)) {
@@ -278,19 +294,24 @@ class ToolController extends Controller
             }
             $product['published_at'] = date("Y-m-d H:i:s", $product['published_at']);
             $data['options'] = [];
-            foreach ($options as $op) {
+            foreach ($options as $kop=>$op) {
                 $values = [];
                 foreach ($op['options'] as $sop) {
+                    $idValueOptions[$sop['id']] = $sop;
                     array_push($values, $sop['value']);
+                    if (!in_array($sop['value'], $keys)) {
+                        array_push($keys, $sop['id']);
+                    }
                 }
                 array_push($data['options'], [
                     "name" => $op['value'],
-                    "position" => 1,
+                    "position" => $kop + 1,
                     "values" => $values
                 ]);
             }
         }
 
+        $countOption = count($data['options']);
         $variantIdAndSku = [];
         foreach ($product as $k => $v) {
             if ($k === 'variants') {
@@ -303,6 +324,17 @@ class ToolController extends Controller
                     $data[$k][$sk] = $sv;
                     unset($data[$k][$sk]['image_id']);
                     unset($data[$k][$sk]['fulfillment_service']);
+
+                    if (count($keys) > 0) {
+                        for ($i = 1; $i <= $countOption; $i++) {
+                            $option = 'option'.$i;
+                            if (in_array($sv[$option], $keys) && !empty($data[$k][$sk])) {
+                                $data[$k][$sk][$option] = $idValueOptions[$sv[$option]]['value'];
+                            } else {
+                                unset($data[$k][$sk]);
+                            }
+                        }
+                    }
                 }
             } elseif ($k === 'body_html') {
                 $data['body_html'] = preg_replace("/<a href=.*?>(.*?)<\/a>/", "", $v);
@@ -315,6 +347,15 @@ class ToolController extends Controller
 
         }
 
+        if (count($data['variants']) > 100) {
+            return [
+                'success' => false,
+                'error' => 'Exceeded maximum number of variants allowed',
+                'data' => []
+            ];
+        }
+
+        $data['variants'] = array_values($data['variants']);
         $apiKey = $shop->api_key;
         $secretKey = $shop->secret_key;
         $store = $shop->store_name;
@@ -446,18 +487,34 @@ class ToolController extends Controller
             unset($product['image']);
         }
 
+        $keys = [];
         $idValueOptions = [];
         if ($source === 'shopbase') {
-            $optionSets = $product['option_sets'];
-            foreach ($optionSets as $k => $v) {
-                foreach ($v['options'] as $sk => $sv) {
-                    $idValueOptions[$sv['id']] = $sv;
+            $options = [];
+            if (array_key_exists('option_sets', $product)) {
+                $options = $product['option_sets'];
+                unset($product['option_sets']);
+            }
+            $data['options'] = [];
+            foreach ($options as $kop=>$op) {
+                $values = [];
+                foreach ($op['options'] as $sop) {
+                    $idValueOptions[$sop['id']] = $sop;
+                    array_push($values, $sop['value']);
+                    if (!in_array($sop['value'], $keys)) {
+                        array_push($keys, $sop['id']);
+                    }
+
                 }
+                array_push($data['options'], [
+                    "name" => $op['value'],
+                    "position" => $kop + 1,
+                    "values" => $values
+                ]);
             }
         }
-        $keys = array_keys($idValueOptions);
-        $tmp = [];
         $variantIdAndSku = [];
+        $countOption = count($data['options']);
         foreach ($product as $k => $v) {
             if ($k === 'images') {
                 foreach ($product[$k] as $sk => $sv) {
@@ -473,39 +530,12 @@ class ToolController extends Controller
                     }
 
                     $data[$k][$sk] = $sv;
-                    if (array_key_exists('option1', $sv)) {
-                        if (count($keys) > 0 && $source === 'shopbase') {
-                            if (in_array($sv['option1'], $keys)) {
-                                array_push($tmp, $sv['option1']);
-                                $data[$k][$sk]['option1'] = $idValueOptions[$sv['option1']]['value'];
-                            } else {
-                                $data[$k][$sk]['option1'] = null;
-                            }
+                    for ($i = 1; $i <= $countOption; $i++) {
+                        $option = 'option'.$i;
+                        if (in_array($sv[$option], $keys) && !empty($data[$k][$sk])) {
+                            $data[$k][$sk][$option] = $idValueOptions[$sv[$option]]['value'];
                         } else {
-                            $data[$k][$sk]['option1'] = strval($sv['option1']);
-                        }
-                    }
-                    if (array_key_exists('option2', $sv)) {
-                        if (count($keys) > 0 && $source === 'shopbase') {
-                            if (in_array($sv['option2'], $keys)) {
-                                array_push($tmp, $sv['option2']);
-                                $data[$k][$sk]['option2'] = $idValueOptions[$sv['option2']]['value'];
-                            } else {
-                                $data[$k][$sk]['option2'] = null;
-                            }
-                        } else {
-                            $data[$k][$sk]['option2'] = strval($sv['option2']);
-                        }
-                    }
-                    if (array_key_exists('option3', $sv)) {
-                        if (count($keys) > 0 && $source === 'shopbase') {
-                            if (in_array($sv['option3'], $keys)) {
-                                $data[$k][$sk]['option3'] = $idValueOptions[$sv['option3']]['value'];
-                            } else {
-                                $data[$k][$sk]['option3'] = null;
-                            }
-                        } else {
-                            $data[$k][$sk]['option3'] = strval($sv['option3']);
+                            unset($data[$k][$sk]);
                         }
                     }
                 }
@@ -518,6 +548,7 @@ class ToolController extends Controller
                 $data[$k] = $v;
             }
         }
+        $data['variants'] = array_values($data['variants']);
         unset($data['tags']);
         $apiKey = $shop->api_key;
         $secretKey = $shop->secret_key;
