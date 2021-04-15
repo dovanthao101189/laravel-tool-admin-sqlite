@@ -311,7 +311,6 @@ class ToolController extends Controller
             }
         }
 
-        $countOption = count($data['options']);
         $variantIdAndSku = [];
         foreach ($product as $k => $v) {
             if ($k === 'variants') {
@@ -326,6 +325,7 @@ class ToolController extends Controller
                     unset($data[$k][$sk]['fulfillment_service']);
 
                     if (count($keys) > 0) {
+                        $countOption = count($data['options']);
                         for ($i = 1; $i <= $countOption; $i++) {
                             $option = 'option'.$i;
                             if (in_array($sv[$option], $keys) && !empty($data[$k][$sk])) {
@@ -514,7 +514,6 @@ class ToolController extends Controller
             }
         }
         $variantIdAndSku = [];
-        $countOption = count($data['options']);
         foreach ($product as $k => $v) {
             if ($k === 'images') {
                 foreach ($product[$k] as $sk => $sv) {
@@ -530,12 +529,15 @@ class ToolController extends Controller
                     }
 
                     $data[$k][$sk] = $sv;
-                    for ($i = 1; $i <= $countOption; $i++) {
-                        $option = 'option'.$i;
-                        if (in_array($sv[$option], $keys) && !empty($data[$k][$sk])) {
-                            $data[$k][$sk][$option] = $idValueOptions[$sv[$option]]['value'];
-                        } else {
-                            unset($data[$k][$sk]);
+                    if(count($keys) > 0) {
+                        $countOption = count($data['options']);
+                        for ($i = 1; $i <= $countOption; $i++) {
+                            $option = 'option'.$i;
+                            if (in_array($sv[$option], $keys) && !empty($data[$k][$sk])) {
+                                $data[$k][$sk][$option] = $idValueOptions[$sv[$option]]['value'];
+                            } else {
+                                unset($data[$k][$sk]);
+                            }
                         }
                     }
                 }
