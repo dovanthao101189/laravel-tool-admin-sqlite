@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\StoreShop;
+use DOMDocument;
+use DOMXPath;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -37,6 +39,7 @@ class ToolController extends Controller
         $site = $request->input('site', []);
         $target = $request->input('target', null);
         $source = $request->input('source', null);
+
         if ($target == 'collection') {
             if ($source === 'shopify') {
                 $arrLink = $this->getArrLinkFromCollectionShopify($link);
@@ -106,6 +109,12 @@ class ToolController extends Controller
 
             if ($source === 'teechip'){
                 $results = $this->getProductTeechip($link);
+                $isSuccess = $results['success'];
+                $sourceData = $results['data'];
+            }
+
+            if ($source === 'enjoycute'){
+                $results = $this->getProductEnjoycute($link);
                 $isSuccess = $results['success'];
                 $sourceData = $results['data'];
             }
@@ -793,6 +802,80 @@ class ToolController extends Controller
             'published_scope' => 'web',
             'status' => 'active',
             "tags" => $tagsMulti,
+            "options" => $options,
+            "variants" => $variants,
+            "images" => $images,
+        ];
+    }
+
+    private function getProductEnjoycute($link)
+    {
+        $html = file_get_contents($link);
+        @$doc = new DOMDocument();
+        @$doc->loadHTML($html);
+        $nodeList = $doc->getElementsByTagName('v-commoditydetail');
+        $strData = $nodeList->item(0)->getAttribute(':product');
+        $data = json_decode($strData, true);
+        if (json_last_error() === JSON_ERROR_NONE || json_last_error() === 0) {
+            $dataFormat = $this->enjoycuteToShopify($data);
+            return [
+                'success' => true,
+                'data' => $dataFormat
+            ];
+        }
+
+        return [
+            'success' => false,
+            'data' => []
+        ];
+    }
+
+    private function enjoycuteToShopify($data) {
+        $options = [];
+        foreach ($data['variant_attrs'] as $kOp=>$vOp) {
+            $option = [
+                'name' => $vOp['name'],
+                'position' => $kOp + 1,
+                'values' => $vOp['value'],
+            ];
+            array_push($options, $option);
+        }
+
+        $images = [];
+        $variants = [];
+        foreach ($data['variants'] as $kV=>$vV) {
+            $variant = [
+                'id' => $vV['ID'],
+                'title' => $vV['title'],
+                'product_id' => $data['ID'],
+                'price' => $vV['sale_price'],
+                'compare_at_price'=> $vV['regular_price'],
+                'sku' => $vV['sku']
+            ];
+            for ($i = 0; $i < count($vV['attrs']); $i++) {
+                if ($i === 3) break;
+                $variant['option'.($i + 1)] = $vV['attrs'][$i]['value'];
+            }
+            array_push($variants, $variant);
+
+            $image = [
+                'position' => $kV + 1,
+                'src' => $vV['image'],
+                'variant_ids' => [$variant['id']],
+            ];
+            array_push($images, $image);
+        }
+
+        return [
+            'title' => $data['title'],
+            'body_html' => $data['post_content'],
+            'handle' => $data['slug'],
+            'vendor' => '',
+            'product_type' => '',
+            'published_at' => date('Y-m-d H:i:s'),
+            'published_scope' => 'web',
+            'status' => 'active',
+            "tags" => [],
             "options" => $options,
             "variants" => $variants,
             "images" => $images,

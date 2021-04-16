@@ -15,6 +15,33 @@
 
 
                         <div class="form-group">
+                            <label for="first_name">Source from:</label>
+                            <div style="margin-left: 25px" class="form-group">
+                                <div class="form-check-inline">
+                                    <label class="form-check-label">
+                                        <input type="radio" class="form-check-input" value="shopify" checked name="source">Shopify
+                                    </label>
+                                </div>
+                                <div class="form-check-inline">
+                                    <label class="form-check-label">
+                                        <input type="radio" class="form-check-input" value="shopbase" name="source">Shopbase
+                                    </label>
+                                </div>
+                                <div class="form-check-inline">
+                                    <label class="form-check-label">
+                                        <input type="radio" class="form-check-input" value="teechip" name="source">Teechip
+                                    </label>
+                                </div>
+                                <div class="form-check-inline">
+                                    <label class="form-check-label">
+                                        <input type="radio" class="form-check-input" value="enjoycute" name="source">Enjoycute
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <div class="form-group">
                             <label for="first_name">Insert to:</label>
                             <div style="margin-left: 25px" class="form-group">
                             @foreach($storeShops as $key => $storeShop)
@@ -47,29 +74,6 @@
                                 <div class="form-check-inline">
                                     <label class="form-check-label">
                                         <input type="radio" class="form-check-input" value="collection" name="target">Collection
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-
-
-                        <div class="form-group">
-                            <label for="first_name">Source from:</label>
-                            <div style="margin-left: 25px" class="form-group">
-                                <div class="form-check-inline">
-                                    <label class="form-check-label">
-                                        <input type="radio" class="form-check-input" value="shopify" checked name="source">Shopify
-                                    </label>
-                                </div>
-                                <div class="form-check-inline">
-                                    <label class="form-check-label">
-                                        <input type="radio" class="form-check-input" value="shopbase" name="source">Shopbase
-                                    </label>
-                                </div>
-                                <div class="form-check-inline">
-                                    <label class="form-check-label">
-                                        <input type="radio" class="form-check-input" value="teechip" name="source">Teechip
                                     </label>
                                 </div>
                             </div>
