@@ -564,6 +564,13 @@ class ToolController extends Controller
             }
         }
         $data['variants'] = array_values($data['variants']);
+        if (count($data['variants']) > 250) {
+            return [
+                'success' => false,
+                'error' => 'Exceeded maximum number of variants allowed',
+                'data' => []
+            ];
+        }
         unset($data['tags']);
         $apiKey = $shop->api_key;
         $secretKey = $shop->secret_key;
@@ -700,6 +707,7 @@ class ToolController extends Controller
         $groupCodeCurrent = $sameCodeCurrent[2];
 
         $positionImage = 1;
+        $variantsCheck = [];
         if (count($productsFetch) > 0) {
             $title = $productsFetch[$codeCurrent]['doc']['names']['design'];
             foreach ($productsFetch as $k => $p) {
@@ -724,6 +732,8 @@ class ToolController extends Controller
                         }
                     }
 
+                    $productId = $this->bigNumber();
+
                     $imagesFetch = $product['images'];
                     $sizesByVariant = [];
                     foreach ($imagesFetch as $k_img => $img) {
@@ -740,11 +750,12 @@ class ToolController extends Controller
                                 $awsUrl = Storage::disk('s3')->url($filePath);
                             }
 
+                            $variantId = $this->bigNumber();
                             array_push($imagesCheck, $img['prefix'] . '/regular.jpg');
                             array_push($images, [
                                 'position' => $positionImage,
                                 'src' => $awsUrl,
-                                'variant_ids' => [$product['_id']],
+                                'variant_ids' => [$variantId],
                             ]);
                         }
                         $positionImage++;
@@ -772,15 +783,19 @@ class ToolController extends Controller
                     }
 
                     foreach ($sizesByVariant as $sizeOp) {
-                        array_push($variants, [
-                            'id' => $product['_id'],
-                            'title' => $title,
-                            'product_id' => $product['productId'],
-                            'price' => $price,
-                            'sku' => $k,
-                            "option1" => $product['color'],
-                            "option2" => $sizeOp,
-                        ]);
+                        $codeOp = trim(str_replace(' ', '_', $product['color'].$sizeOp));
+                        if (!in_array($codeOp, $variantsCheck)) {
+                            array_push($variantsCheck, $codeOp);
+                            array_push($variants, [
+                                'id' => $variantId,
+                                'title' => $title,
+                                'product_id' => $productId,
+                                'price' => $price,
+                                'sku' => $k,
+                                "option1" => $product['color'],
+                                "option2" => $sizeOp,
+                            ]);
+                        }
                     }
                 }
             }
@@ -791,7 +806,9 @@ class ToolController extends Controller
             ['name' => 'Color', 'position' => 2, 'values' => $colors],
         ];
 
-
+//        echo "<pre>";print_r(count($variants));
+//        echo "<pre>";print_r($variantsCheck);
+//        echo "<pre>";print_r($variants);die;
         return [
             'title' => $title,
             'body_html' => '',
@@ -880,5 +897,15 @@ class ToolController extends Controller
             "variants" => $variants,
             "images" => $images,
         ];
+    }
+
+    private function bigNumber() {
+        $output = rand(1,9);
+
+        for($i=0; $i<14; $i++) {
+            $output .= rand(0,9);
+        }
+
+        return intval($output);
     }
 }
