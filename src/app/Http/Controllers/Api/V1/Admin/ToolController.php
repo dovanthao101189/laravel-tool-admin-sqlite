@@ -359,11 +359,7 @@ class ToolController extends Controller
         }
 
         if (count($data['variants']) > 100) {
-            return [
-                'success' => false,
-                'error' => 'Exceeded maximum number of variants allowed',
-                'data' => []
-            ];
+            $data['variants'] = array_slice( $data['variants'], 0, 100);
         }
 
         $data['variants'] = array_values($data['variants']);
@@ -565,11 +561,7 @@ class ToolController extends Controller
         }
         $data['variants'] = array_values($data['variants']);
         if (count($data['variants']) > 250) {
-            return [
-                'success' => false,
-                'error' => 'Exceeded maximum number of variants allowed',
-                'data' => []
-            ];
+            $data['variants'] = array_slice( $data['variants'], 0, 250);
         }
         unset($data['tags']);
         $apiKey = $shop->api_key;
@@ -621,7 +613,7 @@ class ToolController extends Controller
         $VariantIds = [];
         if (array_key_exists('variant_ids', $dataImage)) {
             foreach ($variantIdAndSku as $k => $val) {
-                if (in_array($k, $dataImage['variant_ids'])) {
+                if (in_array($k, $dataImage['variant_ids']) && array_key_exists('new_id', $val)) {
                     array_push($VariantIds, $val['new_id']);
                 }
             }
