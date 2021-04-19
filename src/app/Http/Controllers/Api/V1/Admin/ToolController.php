@@ -664,22 +664,25 @@ class ToolController extends Controller
                     }
                     $data = json_decode($strData, true);
                     if (json_last_error() === JSON_ERROR_NONE || json_last_error() === 0) {
+                        @$doc = new DOMDocument();
+                        @$doc->loadHTML($html);
+                        $xpath = new DomXPath($doc);
+                        $nodeList = $xpath->query("//div[@class='bc-grey-200 bwt-1 w-full']");
+                        $innerHTML= '<div>';
+                        for ($i = 0; $i < $nodeList->length; $i++) {
+                            $node = $nodeList->item($i);
+                            $children = $node->childNodes;
+                            foreach ($children as $child) {
+                                $innerHTML .= $child->ownerDocument->saveXML($child);
+                            }
+                        }
+                        $data['body_html'] = $innerHTML.'</div>';
+
                         $dataFormat = $this->convertTeechipToShopify($data);
                         return [
                             'success' => true,
                             'data' => $dataFormat
                         ];
-//                        @$doc = new DOMDocument();
-//                        @$doc->loadHTML($html);
-//                        $xpath = new DomXPath($doc);
-//                        $nodeList = $xpath->query("//div[@class='bc-grey-200 bwt-1 w-full']");
-//                        $node = $nodeList->item(0);
-//                        $innerHTML= '';
-//                        $children = $node->childNodes;
-//                        foreach ($children as $child) {
-//                            $innerHTML .= $child->ownerDocument->saveXML($child);
-//                        }
-//                        $data['body_html'] = $innerHTML;
                     }
                 }
             }
@@ -695,16 +698,19 @@ class ToolController extends Controller
     {
         $title = '';
         $sizeAll = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
+        $sizeAllWithoutS = ['M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
         $colors = [];
+        $nameOptions = [];
         $sizesMulti = [];
         $tagsMulti = [];
         $images = [];
-        $imagesCheck = [];
+//        $imagesCheck = [];
+//        $imagesKeyValue = [];
         $variants = [];
         $productsFetch = $data['vias']['RetailProduct']['docs']['code'];
         $codeCurrent = $data['routing']['locationBeforeTransitions']['query']['retailProductCode'];
         $sameCodeCurrent = explode("-", $codeCurrent);
-        $groupCodeCurrent = $sameCodeCurrent[2];
+        $groupCodeCurrent = $sameCodeCurrent[3];
 
         $positionImage = 1;
         $variantsCheck = [];
@@ -712,7 +718,7 @@ class ToolController extends Controller
             $title = $productsFetch[$codeCurrent]['doc']['names']['design'];
             foreach ($productsFetch as $k => $p) {
                 $sameCode = explode("-", $k);
-                $groupCode = $sameCode[2];
+                $groupCode = $sameCode[3];
                 if ($groupCodeCurrent === $groupCode) {
                     $product = $p['doc'];
                     if (!in_array($product['color'], $colors)) {
@@ -737,30 +743,12 @@ class ToolController extends Controller
                     $imagesFetch = $product['images'];
                     $sizesByVariant = [];
                     foreach ($imagesFetch as $k_img => $img) {
-                        if (!in_array($img['prefix'] . '/regular.jpg', $imagesCheck)) {
-                            $awsUrl = '';
-                            $url = $img['prefix'].'/regular.jpg';
-                            $contents = file_get_contents($url);
-                            $name = substr($url, strrpos($url, '/') + 1);
-                            $name = explode('?', $name);
-                            $fileName = $name[0];
-                            $filePath = 'teechip/products/'.$k.'/'.$fileName;
-                            $awsSaved = Storage::disk('s3')->put($filePath, $contents, 'public');
-                            if ($awsSaved) {
-                                $awsUrl = Storage::disk('s3')->url($filePath);
-                            }
-
-                            $variantId = $this->bigNumber();
-                            array_push($imagesCheck, $img['prefix'] . '/regular.jpg');
-                            array_push($images, [
-                                'position' => $positionImage,
-                                'src' => $awsUrl,
-                                'variant_ids' => [$variantId],
-                            ]);
-                        }
-                        $positionImage++;
-
                         $sizes = $img['sizes'];
+                        $nameOp = $img['name'];
+                        if (!in_array($nameOp, $nameOptions)) {
+                            array_push($nameOptions, $nameOp);
+                        }
+
                         foreach ($sizes as $k_size => $size) {
                             $size = $size['size'];
                             $sizeInsert = [];
@@ -780,38 +768,69 @@ class ToolController extends Controller
                                 }
                             }
                         }
-                    }
 
-                    foreach ($sizesByVariant as $sizeOp) {
-                        $codeOp = trim(str_replace(' ', '_', $product['color'].$sizeOp));
-                        if (!in_array($codeOp, $variantsCheck)) {
-                            array_push($variantsCheck, $codeOp);
-                            array_push($variants, [
-                                'id' => $variantId,
-                                'title' => $title,
-                                'product_id' => $productId,
-                                'price' => $price,
-                                'sku' => $k,
-                                "option1" => $product['color'],
-                                "option2" => $sizeOp,
-                            ]);
+
+                        foreach ($sizesByVariant as $sizeOp) {
+                            $variantId = $this->bigNumber();
+                            $codeOp = trim(str_replace(' ', '_', $nameOp.$product['color'].$sizeOp));
+                            $sku =  trim(str_replace(' ', '', $nameOp)).'-'.trim(str_replace(' ', '', $product['color'])).'-'.trim(str_replace(' ', '', $sizeOp));
+                            if (!in_array($codeOp, $variantsCheck)) {
+                                array_push($variantsCheck, $codeOp);
+                                array_push($variants, [
+                                    'id' => $variantId,
+                                    'title' => $title,
+                                    'product_id' => $productId,
+                                    'price' => $price,
+                                    'sku' => $sku,
+                                    "option1" => $nameOp,
+                                    "option2" => $product['color'],
+                                    "option3" => $sizeOp,
+                                ]);
+
+                                if (in_array(strtoupper($sizeOp), $sizeAllWithoutS)) {
+                                    array_push($images[count($images) - 1]['variant_ids'], $variantId);
+                                } else {
+                                    $awsUrl = '';
+                                    $url = $img['prefix'].'/regular.jpg';
+                                    $contents = file_get_contents($url);
+                                    $name = substr($url, strrpos($url, '/') + 1);
+                                    $name = explode('?', $name);
+                                    $fileName = $name[0];
+                                    $filePath = 'teechip/products/'.$k.'/'.$fileName;
+                                    $awsSaved = Storage::disk('s3')->put($filePath, $contents, 'public');
+                                    if ($awsSaved) {
+                                        $awsUrl = Storage::disk('s3')->url($filePath);
+                                    }
+
+                                    array_push($images, [
+                                        'position' => $positionImage,
+                                        'src' => $awsUrl,
+                                        'variant_ids' => [$variantId],
+                                    ]);
+
+                                    $positionImage++;
+                                }
+
+
+                            }
                         }
+
+
+
                     }
                 }
             }
         }
 
         $options = [
-            ['name' => 'Size', 'position' => 1, 'values' => $sizesMulti],
+            ['name' => 'Surface', 'position' => 1, 'values' => $nameOptions],
             ['name' => 'Color', 'position' => 2, 'values' => $colors],
+            ['name' => 'Size', 'position' => 3, 'values' => $sizesMulti],
         ];
 
-//        echo "<pre>";print_r(count($variants));
-//        echo "<pre>";print_r($variantsCheck);
-//        echo "<pre>";print_r($variants);die;
         return [
             'title' => $title,
-            'body_html' => '',
+            'body_html' => $data['body_html'],
             'handle' => $codeCurrent,
             'vendor' => '',
             'product_type' => '',
